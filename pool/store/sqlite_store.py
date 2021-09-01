@@ -10,6 +10,7 @@ from chia.util.ints import uint64
 
 from .abstract import AbstractPoolStore
 from ..record import FarmerRecord
+from ..partial import PartialRecord
 from ..util import RequestMetadata
 
 
@@ -45,7 +46,18 @@ class SqlitePoolStore(AbstractPoolStore):
         )
 
         await self.connection.execute(
-            "CREATE TABLE IF NOT EXISTS partial(launcher_id text, timestamp bigint, difficulty bigint)"
+            "CREATE TABLE IF NOT EXISTS partial("
+            "launcher_id text, "
+            "timestamp bigint, "
+            "difficulty bigint,"
+            "challenge text,"
+            "pool_contract_puzzle_hash text,"
+            "plot_public_key text,"
+            "size bigint,"
+            "proof text,"
+            "sp_hash text,"
+            "end_of_sub_slot tinyint,"
+            "harvester_id text)"
         )
 
         await self.connection.execute("CREATE INDEX IF NOT EXISTS scan_ph on farmer(p2_singleton_puzzle_hash)")
@@ -168,18 +180,30 @@ class SqlitePoolStore(AbstractPoolStore):
         await cursor.close()
         await self.connection.commit()
 
-    async def add_partial(self, launcher_id: bytes32, timestamp: uint64, difficulty: uint64):
+    async def add_partial(self, partial: PartialRecord):
         cursor = await self.connection.execute(
-            "INSERT into partial VALUES(?, ?, ?)",
-            (launcher_id.hex(), timestamp, difficulty),
+            "INSERT into partial VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                partial.launcher_id.hex(), 
+                partial.timestamp, 
+                partial.difficulty,
+                partial.challenge,
+                partial.pool_contract_puzzle_hash,
+                partial.plot_public_key,
+                partial.size,
+                partial.proof,
+                partial.sp_hash,
+                int(partial.end_of_sub_slot),
+                partial.harvester_id,
+            ),
         )
         await cursor.close()
-        cursor = await self.connection.execute(f"SELECT points from farmer where launcher_id=?", (launcher_id.hex(),))
+        cursor = await self.connection.execute(f"SELECT points from farmer where launcher_id=?", (partial.launcher_id.hex(),))
         row = await cursor.fetchone()
         points = row[0]
         await cursor.close()
         cursor = await self.connection.execute(
-            f"UPDATE farmer set points=? where launcher_id=?", (points + difficulty, launcher_id.hex())
+            f"UPDATE farmer set points=? where launcher_id=?", (points + partial.difficulty, partial.launcher_id.hex())
         )
         await cursor.close()
         await self.connection.commit()

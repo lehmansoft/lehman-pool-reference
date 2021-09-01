@@ -48,6 +48,7 @@ from .singleton import create_absorb_transaction, get_singleton_state, get_coin_
 from .store.abstract import AbstractPoolStore
 from .store.sqlite_store import SqlitePoolStore
 from .record import FarmerRecord
+from .partial import PartialRecord
 from .util import error_dict, RequestMetadata
 
 
@@ -551,7 +552,20 @@ class Pool:
                 )
 
                 if farmer_record.is_pool_member:
-                    await self.store.add_partial(partial.payload.launcher_id, uint64(int(time.time())), points_received)
+                    partial_record = PartialRecord(
+                        partial.payload.launcher_id,
+                        uint64(int(time.time())),
+                        points_received,
+                        partial.payload.proof_of_space.challenge,
+                        partial.payload.proof_of_space.pool_contract_puzzle_hash,
+                        partial.payload.proof_of_space.plot_public_key,
+                        partial.payload.proof_of_space.size,
+                        partial.payload.proof_of_space.proof.hex(),
+                        partial.payload.sp_hash,
+                        bool(partial.payload.end_of_sub_slot),
+                        partial.payload.harvester_id,
+                    )
+                    await self.store.add_partial(partial_record)
                     self.log.info(
                         f"Farmer {farmer_record.launcher_id} updated points to: "
                         f"{farmer_record.points + points_received}"
