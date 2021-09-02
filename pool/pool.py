@@ -508,6 +508,21 @@ class Pool:
                 self.log.error(f"Unexpected error: {e}")
 
     async def check_and_confirm_partial(self, partial: PostPartialRequest, points_received: uint64) -> None:
+        partial_record = PartialRecord(
+            partial.payload.launcher_id,
+            uint64(int(time.time())),
+            points_received,
+            partial.payload.proof_of_space.challenge,
+            partial.payload.proof_of_space.pool_contract_puzzle_hash,
+            partial.payload.proof_of_space.plot_public_key,
+            partial.payload.proof_of_space.size,
+            partial.payload.proof_of_space.proof.hex(),
+            partial.payload.sp_hash,
+            bool(partial.payload.end_of_sub_slot),
+            partial.payload.harvester_id,
+            True,
+            ""
+        )
         try:
             # TODO(pool): these lookups to the full node are not efficient and can be cached, especially for
             #  scaling to many users
@@ -515,11 +530,19 @@ class Pool:
                 response = await self.node_rpc_client.get_recent_signage_point_or_eos(None, partial.payload.sp_hash)
                 if response is None or response["reverted"]:
                     self.log.info(f"Partial EOS reverted: {partial.payload.sp_hash}")
+                    partial_record.valid=False
+                    partial_record.invalid_error=f"Partial EOS reverted: {partial.payload.sp_hash}"
+                    async with self.store.lock:
+                        await self.store.add_partial(partial_record)
                     return
             else:
                 response = await self.node_rpc_client.get_recent_signage_point_or_eos(partial.payload.sp_hash, None)
                 if response is None or response["reverted"]:
                     self.log.info(f"Partial SP reverted: {partial.payload.sp_hash}")
+                    partial_record.valid=False
+                    partial_record.invalid_error=f"Partial SP reverted: {partial.payload.sp_hash}"
+                    async with self.store.lock:
+                        await self.store.add_partial(partial_record)
                     return
 
             # Now we know that the partial came on time, but also that the signage point / EOS is still in the
@@ -527,6 +550,10 @@ class Pool:
             pos_hash = partial.payload.proof_of_space.get_hash()
             if self.recent_points_added.get(pos_hash):
                 self.log.info(f"Double signage point submitted for proof: {partial.payload}")
+                partial_record.valid=False
+                partial_record.invalid_error=f"Double signage point submitted for proof: {partial.payload}"
+                async with self.store.lock:
+                    await self.store.add_partial(partial_record)
                 return
             self.recent_points_added.put(pos_hash, uint64(1))
 
@@ -537,42 +564,38 @@ class Pool:
 
             if singleton_state_tuple is None:
                 self.log.info(f"Invalid singleton {partial.payload.launcher_id}")
+                partial_record.valid=False
+                partial_record.invalid_error=f"Invalid singleton {partial.payload.launcher_id}"
+                async with self.store.lock:
+                    await self.store.add_partial(partial_record)
                 return
 
             _, _, is_member = singleton_state_tuple
             if not is_member:
                 self.log.info(f"Singleton is not assigned to this pool")
+                partial_record.valid=False
+                partial_record.invalid_error="Singleton is not assigned to this pool"
+                async with self.store.lock:
+                    await self.store.add_partial(partial_record)
                 return
 
             async with self.store.lock:
                 farmer_record: Optional[FarmerRecord] = await self.store.get_farmer_record(partial.payload.launcher_id)
-
                 assert (
                     partial.payload.proof_of_space.pool_contract_puzzle_hash == farmer_record.p2_singleton_puzzle_hash
                 )
-
-                if farmer_record.is_pool_member:
-                    partial_record = PartialRecord(
-                        partial.payload.launcher_id,
-                        uint64(int(time.time())),
-                        points_received,
-                        partial.payload.proof_of_space.challenge,
-                        partial.payload.proof_of_space.pool_contract_puzzle_hash,
-                        partial.payload.proof_of_space.plot_public_key,
-                        partial.payload.proof_of_space.size,
-                        partial.payload.proof_of_space.proof.hex(),
-                        partial.payload.sp_hash,
-                        bool(partial.payload.end_of_sub_slot),
-                        partial.payload.harvester_id,
-                    )
-                    await self.store.add_partial(partial_record)
-                    self.log.info(
+                await self.store.add_partial(partial_record)
+                self.log.info(
                         f"Farmer {farmer_record.launcher_id} updated points to: "
                         f"{farmer_record.points + points_received}"
-                    )
+                )
         except Exception as e:
             error_stack = traceback.format_exc()
             self.log.error(f"Exception in confirming partial: {e} {error_stack}")
+            partial_record.valid=False
+            partial_record.invalid_error=f"Exception in confirming partial: {e} {error_stack}"
+            async with self.store.lock:
+                await self.store.add_partial(partial_record)
 
     async def add_farmer(self, request: PostFarmerRequest, metadata: RequestMetadata) -> Dict:
         async with self.store.lock:

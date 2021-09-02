@@ -21,4 +21,6 @@ class PartialRecord(Streamable):
     proof: str
     sp_hash: str
     end_of_sub_slot: bool  
-    harvester_id: str  
+    harvester_id: str 
+    valid:bool
+    invalid_error:str 

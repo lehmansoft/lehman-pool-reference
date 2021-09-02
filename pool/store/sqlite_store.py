@@ -57,7 +57,9 @@ class SqlitePoolStore(AbstractPoolStore):
             "proof text,"
             "sp_hash text,"
             "end_of_sub_slot tinyint,"
-            "harvester_id text)"
+            "harvester_id text,"
+            "valid tinyint,"
+            "invalid_error text)"
         )
 
         await self.connection.execute("CREATE INDEX IF NOT EXISTS scan_ph on farmer(p2_singleton_puzzle_hash)")
@@ -182,7 +184,7 @@ class SqlitePoolStore(AbstractPoolStore):
 
     async def add_partial(self, partial: PartialRecord):
         cursor = await self.connection.execute(
-            "INSERT into partial VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT into partial VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 partial.launcher_id.hex(), 
                 partial.timestamp, 
@@ -195,6 +197,8 @@ class SqlitePoolStore(AbstractPoolStore):
                 partial.sp_hash,
                 int(partial.end_of_sub_slot),
                 partial.harvester_id,
+                int(partial.valid),
+                partial.invalid_error
             ),
         )
         await cursor.close()
