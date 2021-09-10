@@ -8,6 +8,7 @@ from chia.types.coin_spend import CoinSpend
 from chia.util.ints import uint64
 
 from ..record import FarmerRecord
+from ..partial import PartialRecord
 from ..util import RequestMetadata
 
 
@@ -63,7 +64,7 @@ class AbstractPoolStore(ABC):
         """Rest all Farmers' points to 0"""
 
     @abstractmethod
-    async def add_partial(self, launcher_id: bytes32, timestamp: uint64, difficulty: uint64):
+    async def add_partial(self,  partial: PartialRecord):
         """Register new partial and update corresponding Farmer's points"""
 
     @abstractmethod

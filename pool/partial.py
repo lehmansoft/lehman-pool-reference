@@ -24,3 +24,7 @@ class PartialRecord(Streamable):
     harvester_id: str 
     valid:bool
     invalid_error:str 
+
+    def setValid(self,valid,error):
+        self.valid=valid
+        self.invalid_error=error

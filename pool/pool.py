@@ -530,8 +530,7 @@ class Pool:
                 response = await self.node_rpc_client.get_recent_signage_point_or_eos(None, partial.payload.sp_hash)
                 if response is None or response["reverted"]:
                     self.log.info(f"Partial EOS reverted: {partial.payload.sp_hash}")
-                    partial_record.valid=False
-                    partial_record.invalid_error=f"Partial EOS reverted: {partial.payload.sp_hash}"
+                    partial_record.setValid(False,f"Partial EOS reverted: {partial.payload.sp_hash}")
                     async with self.store.lock:
                         await self.store.add_partial(partial_record)
                     return
@@ -539,8 +538,7 @@ class Pool:
                 response = await self.node_rpc_client.get_recent_signage_point_or_eos(partial.payload.sp_hash, None)
                 if response is None or response["reverted"]:
                     self.log.info(f"Partial SP reverted: {partial.payload.sp_hash}")
-                    partial_record.valid=False
-                    partial_record.invalid_error=f"Partial SP reverted: {partial.payload.sp_hash}"
+                    partial_record.setValid(False,f"Partial SP reverted: {partial.payload.sp_hash}")
                     async with self.store.lock:
                         await self.store.add_partial(partial_record)
                     return
@@ -550,8 +548,7 @@ class Pool:
             pos_hash = partial.payload.proof_of_space.get_hash()
             if self.recent_points_added.get(pos_hash):
                 self.log.info(f"Double signage point submitted for proof: {partial.payload}")
-                partial_record.valid=False
-                partial_record.invalid_error=f"Double signage point submitted for proof: {partial.payload}"
+                partial_record.setValid(False,f"Double signage point submitted for proof: {partial.payload}")
                 async with self.store.lock:
                     await self.store.add_partial(partial_record)
                 return
@@ -564,8 +561,7 @@ class Pool:
 
             if singleton_state_tuple is None:
                 self.log.info(f"Invalid singleton {partial.payload.launcher_id}")
-                partial_record.valid=False
-                partial_record.invalid_error=f"Invalid singleton {partial.payload.launcher_id}"
+                partial_record.setValid(False,f"Invalid singleton {partial.payload.launcher_id}")
                 async with self.store.lock:
                     await self.store.add_partial(partial_record)
                 return
@@ -573,8 +569,7 @@ class Pool:
             _, _, is_member = singleton_state_tuple
             if not is_member:
                 self.log.info(f"Singleton is not assigned to this pool")
-                partial_record.valid=False
-                partial_record.invalid_error="Singleton is not assigned to this pool"
+                partial_record.setValid(False,"Singleton is not assigned to this pool")
                 async with self.store.lock:
                     await self.store.add_partial(partial_record)
                 return
@@ -592,8 +587,7 @@ class Pool:
         except Exception as e:
             error_stack = traceback.format_exc()
             self.log.error(f"Exception in confirming partial: {e} {error_stack}")
-            partial_record.valid=False
-            partial_record.invalid_error=f"Exception in confirming partial: {e} {error_stack}"
+            partial_record.setValid(False,f"Exception in confirming partial: {e} {error_stack}")
             async with self.store.lock:
                 await self.store.add_partial(partial_record)
 
