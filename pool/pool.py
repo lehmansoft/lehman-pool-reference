@@ -523,6 +523,7 @@ class Pool:
             True,
             ""
         )
+        partial_dict= partial_record.to_json_dict()
         try:
             # TODO(pool): these lookups to the full node are not efficient and can be cached, especially for
             #  scaling to many users
@@ -530,17 +531,19 @@ class Pool:
                 response = await self.node_rpc_client.get_recent_signage_point_or_eos(None, partial.payload.sp_hash)
                 if response is None or response["reverted"]:
                     self.log.info(f"Partial EOS reverted: {partial.payload.sp_hash}")
-                    partial_record.setValid(False,f"Partial EOS reverted: {partial.payload.sp_hash}")
+                    partial_dict["valid"]=False
+                    partial_dict["invalid_error"]=f"Partial EOS reverted: {partial.payload.sp_hash}"
                     async with self.store.lock:
-                        await self.store.add_partial(partial_record)
+                        await self.store.add_partial(PartialRecord.from_json_dict(partial_dict))
                     return
             else:
                 response = await self.node_rpc_client.get_recent_signage_point_or_eos(partial.payload.sp_hash, None)
                 if response is None or response["reverted"]:
                     self.log.info(f"Partial SP reverted: {partial.payload.sp_hash}")
-                    partial_record.setValid(False,f"Partial SP reverted: {partial.payload.sp_hash}")
+                    partial_dict["valid"]=False
+                    partial_dict["invalid_error"]=f"Partial SP reverted: {partial.payload.sp_hash}"
                     async with self.store.lock:
-                        await self.store.add_partial(partial_record)
+                        await self.store.add_partial(PartialRecord.from_json_dict(partial_dict))
                     return
 
             # Now we know that the partial came on time, but also that the signage point / EOS is still in the
@@ -548,9 +551,10 @@ class Pool:
             pos_hash = partial.payload.proof_of_space.get_hash()
             if self.recent_points_added.get(pos_hash):
                 self.log.info(f"Double signage point submitted for proof: {partial.payload}")
-                partial_record.setValid(False,f"Double signage point submitted for proof: {partial.payload}")
+                partial_dict["valid"]=False
+                partial_dict["invalid_error"]=f"Double signage point submitted for proof: {partial.payload}"
                 async with self.store.lock:
-                    await self.store.add_partial(partial_record)
+                    await self.store.add_partial(PartialRecord.from_json_dict(partial_dict))
                 return
             self.recent_points_added.put(pos_hash, uint64(1))
 
@@ -561,17 +565,19 @@ class Pool:
 
             if singleton_state_tuple is None:
                 self.log.info(f"Invalid singleton {partial.payload.launcher_id}")
-                partial_record.setValid(False,f"Invalid singleton {partial.payload.launcher_id}")
+                partial_dict["valid"]=False
+                partial_dict["invalid_error"]=f"Invalid singleton {partial.payload.launcher_id}"
                 async with self.store.lock:
-                    await self.store.add_partial(partial_record)
+                    await self.store.add_partial(PartialRecord.from_json_dict(partial_dict))
                 return
 
             _, _, is_member = singleton_state_tuple
             if not is_member:
                 self.log.info(f"Singleton is not assigned to this pool")
-                partial_record.setValid(False,"Singleton is not assigned to this pool")
+                partial_dict["valid"]=False
+                partial_dict["invalid_error"]="Singleton is not assigned to this pool"
                 async with self.store.lock:
-                    await self.store.add_partial(partial_record)
+                    await self.store.add_partial(PartialRecord.from_json_dict(partial_dict))
                 return
 
             async with self.store.lock:
@@ -579,7 +585,7 @@ class Pool:
                 assert (
                     partial.payload.proof_of_space.pool_contract_puzzle_hash == farmer_record.p2_singleton_puzzle_hash
                 )
-                await self.store.add_partial(partial_record)
+                await self.store.add_partial(PartialRecord.from_json_dict(partial_dict))
                 self.log.info(
                         f"Farmer {farmer_record.launcher_id} updated points to: "
                         f"{farmer_record.points + points_received}"
@@ -587,9 +593,10 @@ class Pool:
         except Exception as e:
             error_stack = traceback.format_exc()
             self.log.error(f"Exception in confirming partial: {e} {error_stack}")
-            partial_record.setValid(False,f"Exception in confirming partial: {e} {error_stack}")
+            partial_dict["valid"]=False
+            partial_dict["invalid_error"]=f"Exception in confirming partial: {e} {error_stack}"
             async with self.store.lock:
-                await self.store.add_partial(partial_record)
+                await self.store.add_partial(PartialRecord.from_json_dict(partial_dict))
 
     async def add_farmer(self, request: PostFarmerRequest, metadata: RequestMetadata) -> Dict:
         async with self.store.lock:
@@ -763,10 +770,19 @@ class Pool:
 
         # Validate state of the singleton
         is_pool_member = True
+        # self.log.info(f"singleton_tip_state:{singleton_tip_state}")
+        # self.log.info(f"default_target_puzzle_hash:{self.default_target_puzzle_hash}/{singleton_tip_state.target_puzzle_hash}")
+        # self.log.info(f"relative_lock_height:{self.relative_lock_height}")
+        # self.log.info(f"version:{ POOL_PROTOCOL_VERSION}")
+        # self.log.info(f"state:{ PoolSingletonState.SELF_POOLING.value}/{PoolSingletonState.LEAVING_POOL.value}")
+      
         if singleton_tip_state.target_puzzle_hash != self.default_target_puzzle_hash:
             self.log.info(
                 f"Wrong target puzzle hash: {singleton_tip_state.target_puzzle_hash} for launcher_id {launcher_id}"
             )
+            # buried_singleton_tip_state_dict=buried_singleton_tip_state.to_json_dict()
+            # buried_singleton_tip_state_dict["target_puzzle_hash"]="0x314cd763968d3b1fe96c98aa47385d9ea638e414d25385e58afe43a2f72e59d8"
+            # buried_singleton_tip_state = PoolState.from_json_dict(buried_singleton_tip_state_dict)
             is_pool_member = False
         elif singleton_tip_state.relative_lock_height != self.relative_lock_height:
             self.log.info(
