@@ -184,7 +184,7 @@ class SqlitePoolStore(AbstractPoolStore):
 
     async def add_partial(self, partial: PartialRecord):
         cursor = await self.connection.execute(
-            "INSERT into partial VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT into partial VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 partial.launcher_id.hex(), 
                 partial.timestamp, 
@@ -198,6 +198,7 @@ class SqlitePoolStore(AbstractPoolStore):
                 int(partial.end_of_sub_slot),
                 partial.harvester_id,
                 int(partial.valid),
+                "",
                 partial.invalid_error
             ),
         )
