@@ -552,7 +552,7 @@ class Pool:
             if self.recent_points_added.get(pos_hash):
                 self.log.info(f"Double signage point submitted for proof: {partial.payload}")
                 partial_dict["valid"]=False
-                partial_dict["invalid_error"]=f"Double signage point submitted for proof: {partial.payload}"
+                partial_dict["invalid_error"]=f"Double signage point submitted for proof"
                 async with self.store.lock:
                     await self.store.add_partial(PartialRecord.from_json_dict(partial_dict))
                 return
